@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#07030f" />
+  <meta name="description" content="群聊最抽象之星评选 · Nova Crystal 水晶霓虹美学 · 匿名实时投票" />
+  <title>最抽象之星 · Abstract Star</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg-0: #07030f; --bg-1: #110826;
+      --pink: #ff2d95; --cyan: #00f0ff; --purple: #b967ff;
+      --gold: #ffe14d; --pure: #ff9ec7;
+      --text: #f4f0ff; --muted: #8c7fac; --danger: #ff4458;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; background: var(--bg-0); }
+    body {
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      font-feature-settings: 'tnum';
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+    #root { min-height: 100vh; }
+    .fnt-dsp { font-family: 'Audiowide', sans-serif; letter-spacing: 0.04em; }
+    .fnt-mn { font-family: 'Space Mono', monospace; }
+    .cn-h { font-weight: 700; letter-spacing: 0.2em; }
+    .cn-l { letter-spacing: 0.1em; }
+
+    .crystal {
+      position: relative;
+      background: linear-gradient(135deg, rgba(255,45,149,0.06), rgba(0,240,255,0.03) 45%, rgba(185,103,255,0.08));
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px;
+    }
+    .crystal::before {
+      content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--pink) 40%, var(--cyan) 60%, transparent);
+      opacity: 0.6;
+    }
+    .scanline {
+      background-image: linear-gradient(to bottom, transparent 0, transparent 2px, rgba(255,255,255,0.015) 2px, rgba(255,255,255,0.015) 3px);
+      background-size: 100% 3px;
+    }
+
+    @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    .rise { animation: rise 0.6s cubic-bezier(0.2,0.8,0.2,1) both; }
+    @keyframes pulseGold {
+      0%, 100% { box-shadow: 0 0 18px rgba(255,225,77,0.4), 0 0 48px rgba(255,45,149,0.3); }
+      50% { box-shadow: 0 0 28px rgba(255,225,77,0.6), 0 0 72px rgba(255,45,149,0.45); }
+    }
+    .top-glow { animation: pulseGold 2.4s ease-in-out infinite; }
+    @keyframes floatSlow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    .float-slow { animation: floatSlow 4s ease-in-out infinite; }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    .shimmer-text {
+      background: linear-gradient(90deg, var(--pink) 0%, var(--gold) 30%, var(--cyan) 60%, var(--purple) 100%);
+      background-size: 200% auto; -webkit-background-clip: text; background-clip: text;
+      color: transparent; animation: shimmer 4s linear infinite;
+    }
+    @keyframes burst {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+      30% { opacity: 1; }
+      100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(1.1) rotate(var(--tr)); }
+    }
+    .burst-shard { animation: burst 1.1s cubic-bezier(0.2,0.6,0.2,1) forwards; }
+    @keyframes ringExpand {
+      0% { opacity: 0.8; transform: translate(-50%, -50%) scale(0.3); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(3); }
+    }
+    .burst-ring { animation: ringExpand 1s cubic-bezier(0.2,0.8,0.2,1) forwards; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .fade-in { animation: fadeIn 0.3s ease both; }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.92) translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    .modal-in { animation: modalIn 0.3s cubic-bezier(0.2,0.8,0.2,1) both; }
+
+    .neon-p { text-shadow: 0 0 12px rgba(255,45,149,0.6); }
+    .neon-c { text-shadow: 0 0 10px rgba(0,240,255,0.5); }
+    .neon-g { text-shadow: 0 0 14px rgba(255,225,77,0.7), 0 0 24px rgba(255,140,80,0.3); }
+
+    button { cursor: pointer; font-family: inherit; }
+    input, textarea { font-family: inherit; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      color: white; border: none; padding: 14px 24px; border-radius: 10px;
+      font-weight: 700; letter-spacing: 0.08em;
+      transition: transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 6px 20px rgba(255,45,149,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    .btn-primary:active { transform: translateY(1px); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ghost {
+      background: transparent; color: var(--muted);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 8px 14px; border-radius: 8px; font-size: 12px;
+      letter-spacing: 0.1em; transition: all 0.2s;
+    }
+    .btn-ghost:hover { color: var(--text); border-color: rgba(255,255,255,0.28); }
+
+    .led { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3a2855; flex-shrink: 0; }
+    .led.on { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+    .led.me { background: var(--pink); box-shadow: 0 0 8px var(--pink); }
+    .led.out { background: var(--muted); box-shadow: none; }
+
+    .chip {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 10px; letter-spacing: 0.1em; font-family: 'Space Mono', monospace;
+    }
+    .chip-out { background: rgba(140,127,172,0.15); color: var(--muted); border: 1px solid rgba(140,127,172,0.3); }
+    .chip-me { background: rgba(255,45,149,0.15); color: var(--pink); border: 1px solid rgba(255,45,149,0.4); }
+    .chip-picked { background: rgba(0,240,255,0.12); color: var(--cyan); border: 1px solid rgba(0,240,255,0.4); }
+
+    textarea {
+      width: 100%; background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,45,149,0.3); color: var(--text);
+      padding: 12px; border-radius: 10px; resize: vertical; outline: none;
+      font-size: 14px; line-height: 1.6; min-height: 120px;
+    }
+    textarea:focus { border-color: var(--pink); }
+    input[type=text], input[type=password] {
+      width: 100%; background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,45,149,0.3); color: var(--text);
+      padding: 12px; border-radius: 10px; outline: none; font-size: 16px;
+    }
+    .scroll-no-bar::-webkit-scrollbar { display: none; }
+    .scroll-no-bar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    .loading-screen {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: #07030f; z-index: 9999;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="loading-screen">
+      <div class="fnt-dsp shimmer-text" style="font-size: 20px;">◆ LOADING ◆</div>
+    </div>
+  </div>
+
+  <!-- React + Babel from CDN. Babel compiles the JSX in the browser. -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel" data-type="module" src="app.js"></script>
+</body>
+</html>
