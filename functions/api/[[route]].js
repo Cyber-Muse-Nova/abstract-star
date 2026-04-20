@@ -96,13 +96,21 @@ async function handleVote(request, env) {
     try { votes = JSON.parse(currentStr); } catch (e) {}
   }
 
+  // 多选池的投票上限；未列出的池默认 5；friends_pure 无上限。
+  const POOL_MAX_VOTES = {
+    friends_abstract: 5,
+    friends_pervert: 5,
+    friends_pure: Infinity,
+  };
+
   const isEmpty = value === null || value === undefined ||
     (Array.isArray(value) && value.length === 0);
   if (isEmpty) {
     delete votes[pool_key];
   } else {
     if (Array.isArray(value)) {
-      if (value.length > 5) return json({ error: "too many votes" }, 400);
+      const max = POOL_MAX_VOTES[pool_key] != null ? POOL_MAX_VOTES[pool_key] : 5;
+      if (value.length > max) return json({ error: "too many votes" }, 400);
       votes[pool_key] = value.filter(function (v) { return typeof v === "string"; });
     } else if (typeof value === "string") {
       votes[pool_key] = value;

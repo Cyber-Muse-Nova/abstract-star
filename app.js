@@ -105,7 +105,7 @@ const POOLS = {
   friends: { name: '群友', emoji: '👥', subs: [
     { key: 'friends_abstract', name: '最抽象', mode: 'multi5', candidates: FRIENDS, color: '#ff2d95' },
     { key: 'friends_pervert', name: '最变态', mode: 'multi5', candidates: FRIENDS, color: '#b967ff' },
-    { key: 'friends_pure', name: '最纯爱', mode: 'multi5', candidates: FRIENDS, color: '#ff9ec7' },
+    { key: 'friends_pure', name: '最纯爱', mode: 'multi5', candidates: FRIENDS, color: '#ff9ec7', maxVotes: Infinity },
   ]},
   ai: { name: 'AI', emoji: '🤖', subs: [
     { key: 'ai_abstract', name: '最抽象', mode: 'single', candidates: AIS, color: '#ff2d95' },
@@ -647,6 +647,8 @@ function Leaderboard({ rankings, color, subName }) {
 function MyBallot({ sub, myVotes }) {
   const { mode, color, name } = sub;
   const isMulti = mode === 'multi5';
+  const max = sub.maxVotes ?? MAX_FRIEND_VOTES;
+  const unlimited = !Number.isFinite(max);
   const myPick = myVotes[sub.key];
   const picks = isMulti ? (myPick || []) : (myPick ? [myPick] : []);
   return (
@@ -659,14 +661,18 @@ function MyBallot({ sub, myVotes }) {
           <Diamond size={12} color={color} style={{ marginRight: 10 }} />
           <div style={{ fontSize: 14, color: 'var(--text)' }}>
             还没投票
-            {isMulti && <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--muted)' }}>最多可选 {MAX_FRIEND_VOTES} 个</span>}
+            {isMulti && (
+              <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--muted)' }}>
+                {unlimited ? '无上限 · 可选所有人' : `最多可选 ${max} 个`}
+              </span>
+            )}
           </div>
         </div>
       ) : (
         <div>
           {isMulti && (
             <div className="fnt-mn" style={{ fontSize: 12, marginBottom: 8, color }}>
-              已选 {picks.length} / {MAX_FRIEND_VOTES}
+              {unlimited ? `已选 ${picks.length}（无上限）` : `已选 ${picks.length} / ${max}`}
             </div>
           )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -687,9 +693,10 @@ function MyBallot({ sub, myVotes }) {
 function CandidateList({ sub, myId, myVotes, voteCounts, optedOut, onVote, onViewBio }) {
   const { mode, candidates, color } = sub;
   const isMulti = mode === 'multi5';
+  const max = sub.maxVotes ?? MAX_FRIEND_VOTES;
   const myPick = myVotes[sub.key];
   const picks = isMulti ? (myPick || []) : (myPick ? [myPick] : []);
-  const picksFull = isMulti && picks.length >= MAX_FRIEND_VOTES;
+  const picksFull = isMulti && picks.length >= max;
   const hasLetters = candidates.length > 0 && candidates[0].letter !== undefined;
   const grouped = useMemo(() => {
     if (!hasLetters) return { '': candidates };
@@ -721,15 +728,15 @@ function CandidateList({ sub, myId, myVotes, voteCounts, optedOut, onVote, onVie
               const isPicked = picks.includes(c.id);
               const count = voteCounts[c.id] || 0;
               const isOut = optedOut.has(c.id);
-              const cannotPick = isMe || (picksFull && !isPicked) || isOut;
+              const cannotPick = (picksFull && !isPicked) || isOut;
               return (
                 <div key={c.id} style={{
                   display: 'flex', alignItems: 'center', padding: 12, borderRadius: 8,
                   background: isPicked ? 'rgba(0,240,255,0.08)' : 'transparent',
                   border: isPicked ? '1px solid rgba(0,240,255,0.35)' : '1px solid transparent',
-                  marginBottom: 4, opacity: isOut || isMe ? 0.55 : 1,
+                  marginBottom: 4, opacity: isOut ? 0.55 : 1,
                 }}>
-                  <span className={`led ${isMe ? 'me' : isOut ? 'out' : isPicked ? 'on' : ''}`} style={{ marginRight: 12 }} />
+                  <span className={`led ${isPicked ? 'on' : isMe ? 'me' : isOut ? 'out' : ''}`} style={{ marginRight: 12 }} />
                   <button onClick={() => onViewBio(c)} style={{
                     background: 'transparent', border: 'none', color: 'var(--text)',
                     padding: 0, textAlign: 'left', flex: 1, minWidth: 0,
@@ -741,7 +748,7 @@ function CandidateList({ sub, myId, myVotes, voteCounts, optedOut, onVote, onVie
                   </button>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8 }}>
                     <div className="fnt-mn" style={{ fontSize: 12, color: 'var(--muted)' }}>{count}票</div>
-                    {!isMe && (!isOut || isPicked) && (
+                    {(!isOut || isPicked) && (
                       <button onClick={() => onVote(c, isPicked)} disabled={cannotPick && !isPicked} style={{
                         background: isPicked ? 'rgba(255,68,88,0.15)' : 'rgba(255,45,149,0.12)',
                         border: `1px solid ${isPicked ? 'rgba(255,68,88,0.4)' : 'rgba(255,45,149,0.3)'}`,
@@ -749,7 +756,7 @@ function CandidateList({ sub, myId, myVotes, voteCounts, optedOut, onVote, onVie
                         padding: '6px 12px', borderRadius: 8, fontSize: 12,
                         opacity: cannotPick && !isPicked ? 0.3 : 1, letterSpacing: '0.05em',
                       }}>
-                        {isPicked ? '撤回' : isMulti ? (picksFull ? '已满' : '+1 票') : '投 TA'}
+                        {isPicked ? '撤回' : isMulti ? (picksFull ? '已满' : (isMe ? '投自己' : '+1 票')) : '投 TA'}
                       </button>
                     )}
                   </div>
@@ -995,10 +1002,11 @@ function App() {
     if (sub.mode === 'single') {
       nextValue = (isRemoving || currentVote === target.id) ? null : target.id;
     } else {
+      const max = sub.maxVotes ?? MAX_FRIEND_VOTES;
       const arr = Array.isArray(currentVote) ? [...currentVote] : [];
       const idx = arr.indexOf(target.id);
       if (idx >= 0) arr.splice(idx, 1);
-      else if (arr.length < MAX_FRIEND_VOTES) arr.push(target.id);
+      else if (arr.length < max) arr.push(target.id);
       nextValue = arr.length === 0 ? null : arr;
     }
     setAllVotes(v => {
