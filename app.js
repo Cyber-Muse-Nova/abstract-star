@@ -868,8 +868,17 @@ function App() {
     return () => clearInterval(t);
   }, [loadAll]);
 
+  const missingClaimCountRef = useRef(0);
   useEffect(() => {
-    if (!loading && identity && claimedIds.size > 0 && !claimedIds.has(identity.id)) {
+    if (loading || !identity || claimedIds.size === 0) return;
+    if (claimedIds.has(identity.id)) {
+      missingClaimCountRef.current = 0;
+      return;
+    }
+    // KV list 是最终一致的，刚 claim 的 key 可能暂时不出现。
+    // 连续 3 次轮询（约 15s）都缺失才判定为 admin reset，避免误弹出。
+    missingClaimCountRef.current += 1;
+    if (missingClaimCountRef.current >= 3) {
       clearAuth(); window.location.reload();
     }
   }, [claimedIds, identity, loading]);
