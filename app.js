@@ -447,6 +447,69 @@ function PersonModal({ person, bio, isMe, isOptedOut, onClose }) {
     </Modal>
   );
 }
+function ManifestoListModal({ bioIds, bios, loadBios, myId, optedOut, onClose, onViewPerson }) {
+  const [busy, setBusy] = useState(false);
+  const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    const missing = [...bioIds].filter(id => bios[id] === undefined);
+    if (missing.length === 0) return;
+    setBusy(true);
+    loadBios(missing).finally(() => setBusy(false));
+  }, []);
+
+  const entries = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return [...bioIds]
+      .map(id => ({ id, person: ID_LOOKUP[id], text: bios[id] }))
+      .filter(e => e.person && e.text && e.text.trim())
+      .filter(e => !q || e.person.name.toLowerCase().includes(q) || e.text.toLowerCase().includes(q))
+      .sort((a, b) => a.person.name.localeCompare(b.person.name, 'zh'));
+  }, [bioIds, bios, query]);
+
+  return (
+    <Modal onClose={onClose} maxWidth={560}>
+      <div className="fnt-mn cn-l" style={{ fontSize: 12, color: 'var(--cyan)', marginBottom: 6 }}>
+        ◆ ALL MANIFESTOS · 拉票宣言合集
+      </div>
+      <div className="fnt-mn" style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+        仅显示写了宣言的人 · 共 {entries.length} 位
+      </div>
+      <input value={query} onChange={e => setQuery(e.target.value)}
+        placeholder="搜名字或内容…"
+        style={{ marginBottom: 14 }} />
+      {busy && entries.length === 0 && (
+        <div className="fnt-mn" style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: '24px 0' }}>
+          LOADING…
+        </div>
+      )}
+      {!busy && entries.length === 0 && (
+        <div style={{ fontSize: 14, color: 'var(--muted)', textAlign: 'center', padding: '24px 0', fontStyle: 'italic' }}>
+          {bioIds.size === 0 ? '还没人写宣言……第一个来吧！' : '没找到匹配的宣言'}
+        </div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {entries.map(e => (
+          <div key={e.id} className="crystal" style={{
+            padding: 14, background: 'rgba(0,0,0,0.3)', cursor: 'pointer',
+          }} onClick={() => onViewPerson(e.person)}>
+            <div style={{ fontSize: 15, color: 'var(--pink)', marginBottom: 6, wordBreak: 'break-all' }}>
+              {e.person.name}
+              {e.id === myId && <span className="chip chip-me" style={{ marginLeft: 8 }}>YOU</span>}
+              {optedOut.has(e.id) && <span className="chip chip-out" style={{ marginLeft: 8 }}>已退赛</span>}
+            </div>
+            <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 13, color: 'var(--text)' }}>
+              {e.text}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+        <button onClick={onClose} className="btn-ghost" style={{ flex: 1, padding: '12px' }}>关闭</button>
+      </div>
+    </Modal>
+  );
+}
 function AdminModal({ onReset, onClose }) {
   const [password, setPassword] = useState('');
   const [step, setStep] = useState('auth');
@@ -722,7 +785,7 @@ function PoolView({ sub, myId, myVotes, voteCounts, optedOut, onVote, onViewBio 
 // ═══════════════════════════════════════════════════════════
 // HEADER + TABS
 // ═══════════════════════════════════════════════════════════
-function Header({ myName, myId, optedOut, onEditBio, onToggleOptOut, onTitleTap, adminTaps }) {
+function Header({ myName, myId, optedOut, bioCount, onEditBio, onToggleOptOut, onShowManifestos, onTitleTap, adminTaps }) {
   const amOut = optedOut.has(myId);
   return (
     <div className="rise" style={{ marginBottom: 16 }}>
@@ -760,6 +823,14 @@ function Header({ myName, myId, optedOut, onEditBio, onToggleOptOut, onTitleTap,
           </div>
         </div>
       </div>
+      <button onClick={onShowManifestos} className="btn-ghost" style={{
+        width: '100%', marginTop: 12, padding: '10px 12px', fontSize: 13,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        borderColor: 'rgba(0,240,255,0.35)', color: 'var(--cyan)',
+      }}>
+        <span>📖 全部拉票宣言</span>
+        <span className="fnt-mn" style={{ fontSize: 12, color: 'var(--muted)' }}>· {bioCount} 位已写</span>
+      </button>
     </div>
   );
 }
@@ -828,6 +899,8 @@ function App() {
   const [allVotes, setAllVotes] = useState({});
   const [optedOut, setOptedOut] = useState(new Set());
   const [bios, setBios] = useState({});
+  const [bioIds, setBioIds] = useState(new Set());
+  const [showManifestos, setShowManifestos] = useState(false);
 
   const [pickingPerson, setPickingPerson] = useState(null);
   const [claimBusy, setClaimBusy] = useState(false);
@@ -853,7 +926,20 @@ function App() {
       setClaimedIds(new Set(data.claims || []));
       setOptedOut(new Set(data.optouts || []));
       setAllVotes(data.votes || {});
+      setBioIds(new Set(data.bio_ids || []));
     } catch (e) { console.error('loadAll failed', e); }
+  }, []);
+
+  const loadBios = useCallback(async (ids) => {
+    const results = await Promise.all(ids.map(async id => {
+      try { return [id, await apiGetBio(id)]; }
+      catch { return [id, '']; }
+    }));
+    setBios(prev => {
+      const next = { ...prev };
+      for (const [id, text] of results) next[id] = text;
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -932,7 +1018,13 @@ function App() {
     setBioBusy(true);
     try {
       await apiSaveBio(text);
-      setBios(b => ({ ...b, [identity.id]: text.trim() }));
+      const trimmed = text.trim();
+      setBios(b => ({ ...b, [identity.id]: trimmed }));
+      setBioIds(s => {
+        const n = new Set(s);
+        if (trimmed) n.add(identity.id); else n.delete(identity.id);
+        return n;
+      });
       setEditingBio(false);
     } catch (e) { console.error(e); }
     setBioBusy(false);
@@ -1001,8 +1093,10 @@ function App() {
       {showBurst && <ParticleBurst key={burst} onDone={() => setShowBurst(false)} />}
       <div style={{ position: 'relative', maxWidth: 560, margin: '0 auto', padding: '20px 16px 0', zIndex: 2 }}>
         <Header myName={identity.name} myId={identity.id} optedOut={optedOut}
+          bioCount={bioIds.size}
           onEditBio={() => setEditingBio(true)}
           onToggleOptOut={handleToggleOptOut}
+          onShowManifestos={() => setShowManifestos(true)}
           onTitleTap={handleTitleTap}
           adminTaps={adminTaps} />
         <TabBar level1={level1} setLevel1={setLevel1}
@@ -1023,6 +1117,11 @@ function App() {
         isOptedOut={optedOut.has(viewingPerson.person.id)}
         onClose={() => setViewingPerson(null)} />)}
       {showAdmin && (<AdminModal onReset={handleAdminReset} onClose={() => setShowAdmin(false)} />)}
+      {showManifestos && (<ManifestoListModal
+        bioIds={bioIds} bios={bios} loadBios={loadBios}
+        myId={identity.id} optedOut={optedOut}
+        onClose={() => setShowManifestos(false)}
+        onViewPerson={(person) => { setShowManifestos(false); openPersonBio(person); }} />)}
     </div>
   );
 }
