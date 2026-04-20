@@ -152,7 +152,12 @@ function authHeaders() {
 }
 async function parseOrThrow(res) {
   let data; try { data = await res.json(); } catch { data = null; }
-  if (!res.ok) { const e = new Error(data?.error || `HTTP ${res.status}`); e.status = res.status; throw e; }
+  if (!res.ok) {
+    const e = new Error(data?.error || `HTTP ${res.status}`); e.status = res.status;
+    // token 失效（如 admin reset）是登出的唯一可靠信号。
+    if (res.status === 401 && getStoredAuth()) { clearAuth(); window.location.reload(); }
+    throw e;
+  }
   return data;
 }
 async function apiState() {
@@ -867,21 +872,6 @@ function App() {
     const t = setInterval(loadAll, POLL_MS);
     return () => clearInterval(t);
   }, [loadAll]);
-
-  const missingClaimCountRef = useRef(0);
-  useEffect(() => {
-    if (loading || !identity || claimedIds.size === 0) return;
-    if (claimedIds.has(identity.id)) {
-      missingClaimCountRef.current = 0;
-      return;
-    }
-    // KV list 是最终一致的，刚 claim 的 key 可能暂时不出现。
-    // 连续 3 次轮询（约 15s）都缺失才判定为 admin reset，避免误弹出。
-    missingClaimCountRef.current += 1;
-    if (missingClaimCountRef.current >= 3) {
-      clearAuth(); window.location.reload();
-    }
-  }, [claimedIds, identity, loading]);
 
   const myVotes = useMemo(() => identity?.id ? (allVotes[identity.id] || {}) : {}, [allVotes, identity]);
 
