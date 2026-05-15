@@ -106,6 +106,7 @@ const POOLS = {
     { key: 'friends_abstract', name: '最抽象', mode: 'multi5', candidates: FRIENDS, color: '#ff2d95' },
     { key: 'friends_pervert', name: '最变态', mode: 'multi5', candidates: FRIENDS, color: '#b967ff' },
     { key: 'friends_pure', name: '最纯爱', mode: 'multi5', candidates: FRIENDS, color: '#ff9ec7', maxVotes: Infinity },
+    { key: 'friends_silly', name: '最弱智', mode: 'numeric', candidates: FRIENDS, color: '#ff8a3d', maxVotes: 9999 },
   ]},
   ai: { name: 'AI', emoji: '🤖', subs: [
     { key: 'ai_abstract', name: '最抽象', mode: 'single', candidates: AIS, color: '#ff2d95' },
@@ -647,16 +648,22 @@ function Leaderboard({ rankings, color, subName }) {
 function MyBallot({ sub, myVotes }) {
   const { mode, color, name } = sub;
   const isMulti = mode === 'multi5';
+  const isNumeric = mode === 'numeric';
   const max = sub.maxVotes ?? MAX_FRIEND_VOTES;
-  const unlimited = !Number.isFinite(max);
+  const unlimited = !isNumeric && !Number.isFinite(max);
   const myPick = myVotes[sub.key];
+  const numericEntries = isNumeric && myPick && typeof myPick === 'object' && !Array.isArray(myPick)
+    ? Object.entries(myPick).filter(([, n]) => typeof n === 'number' && n > 0)
+    : [];
+  const numericTotal = numericEntries.reduce((s, [, n]) => s + n, 0);
   const picks = isMulti ? (myPick || []) : (myPick ? [myPick] : []);
+  const isEmpty = isNumeric ? numericEntries.length === 0 : picks.length === 0;
   return (
     <div className="crystal" style={{ padding: 16, marginBottom: 20 }}>
       <div className="fnt-mn cn-l" style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>
         YOUR BALLOT · 你的一票 ({name})
       </div>
-      {picks.length === 0 ? (
+      {isEmpty ? (
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <Diamond size={12} color={color} style={{ marginRight: 10 }} />
           <div style={{ fontSize: 14, color: 'var(--text)' }}>
@@ -666,6 +673,27 @@ function MyBallot({ sub, myVotes }) {
                 {unlimited ? '无上限 · 可选所有人' : `最多可选 ${max} 个`}
               </span>
             )}
+            {isNumeric && (
+              <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--muted)' }}>
+                给每位填数字 · 可投自己也可投别人
+              </span>
+            )}
+          </div>
+        </div>
+      ) : isNumeric ? (
+        <div>
+          <div className="fnt-mn" style={{ fontSize: 12, marginBottom: 8, color }}>
+            共 {numericTotal} 票 · {numericEntries.length} 位
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {numericEntries.map(([id, n]) => {
+              const c = ID_LOOKUP[id]; if (!c) return null;
+              return (
+                <div key={id} className="chip chip-picked" style={{ padding: '6px 12px', fontSize: 12 }}>
+                  {c.name} × {n}
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -690,12 +718,71 @@ function MyBallot({ sub, myVotes }) {
     </div>
   );
 }
+function NumericVoteInput({ value, max, color, onCommit }) {
+  const [text, setText] = useState(String(value || 0));
+  const [error, setError] = useState('');
+  useEffect(() => { setText(String(value || 0)); }, [value]);
+
+  const commit = () => {
+    const trimmed = (text || '').trim();
+    if (trimmed === '') {
+      setError('');
+      setText('0');
+      if (value !== 0) onCommit(0);
+      return;
+    }
+    if (!/^\d+$/.test(trimmed)) {
+      setError('要填整数');
+      setText(String(value || 0));
+      setTimeout(() => setError(''), 2500);
+      return;
+    }
+    const n = parseInt(trimmed, 10);
+    if (n > max) {
+      setError(`上限 ${max}`);
+      setText(String(value || 0));
+      setTimeout(() => setError(''), 2500);
+      return;
+    }
+    setError('');
+    setText(String(n));
+    if (n !== value) onCommit(n);
+  };
+
+  const active = value > 0;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 78 }}>
+      <input
+        type="number"
+        inputMode="numeric"
+        value={text}
+        min="0"
+        onFocus={e => e.target.select()}
+        onChange={e => { setText(e.target.value); setError(''); }}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+        style={{
+          width: 74, padding: '6px 8px', textAlign: 'center', fontSize: 13,
+          border: `1px solid ${active ? color : 'rgba(255,255,255,0.15)'}`,
+          background: active ? 'rgba(0,240,255,0.08)' : 'transparent',
+          color: active ? 'var(--text)' : 'var(--muted)',
+          borderRadius: 8,
+        }}
+      />
+      {error && (
+        <div className="fnt-mn" style={{ fontSize: 10, color: 'var(--danger)' }}>{error}</div>
+      )}
+    </div>
+  );
+}
 function CandidateList({ sub, myId, myVotes, voteCounts, optedOut, onVote, onViewBio }) {
   const { mode, candidates, color } = sub;
   const isMulti = mode === 'multi5';
+  const isNumeric = mode === 'numeric';
   const max = sub.maxVotes ?? MAX_FRIEND_VOTES;
   const myPick = myVotes[sub.key];
   const picks = isMulti ? (myPick || []) : (myPick ? [myPick] : []);
+  const myNumeric = isNumeric && myPick && typeof myPick === 'object' && !Array.isArray(myPick) ? myPick : {};
   const picksFull = isMulti && picks.length >= max;
   const hasLetters = candidates.length > 0 && candidates[0].letter !== undefined;
   const grouped = useMemo(() => {
@@ -709,7 +796,8 @@ function CandidateList({ sub, myId, myVotes, voteCounts, optedOut, onVote, onVie
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '0 4px' }}>
         <div className="cn-h" style={{ fontSize: 14, color: 'var(--text)' }}>
-          <Diamond size={10} color={color} style={{ marginRight: 8 }} />候选人 · 点击投票
+          <Diamond size={10} color={color} style={{ marginRight: 8 }} />
+          候选人 · {isNumeric ? '给每位填数字' : '点击投票'}
         </div>
         <div className="fnt-mn" style={{ fontSize: 12, color: 'var(--muted)', letterSpacing: '0.2em' }}>
           {candidates.length} CANDIDATES
@@ -725,10 +813,11 @@ function CandidateList({ sub, myId, myVotes, voteCounts, optedOut, onVote, onVie
             )}
             {grouped[letter].map(c => {
               const isMe = c.id === myId;
-              const isPicked = picks.includes(c.id);
+              const myCount = isNumeric ? (myNumeric[c.id] || 0) : 0;
+              const isPicked = isNumeric ? myCount > 0 : picks.includes(c.id);
               const count = voteCounts[c.id] || 0;
               const isOut = optedOut.has(c.id);
-              const cannotPick = (picksFull && !isPicked) || isOut;
+              const cannotPick = !isNumeric && ((picksFull && !isPicked) || isOut);
               return (
                 <div key={c.id} style={{
                   display: 'flex', alignItems: 'center', padding: 12, borderRadius: 8,
@@ -748,7 +837,14 @@ function CandidateList({ sub, myId, myVotes, voteCounts, optedOut, onVote, onVie
                   </button>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8 }}>
                     <div className="fnt-mn" style={{ fontSize: 12, color: 'var(--muted)' }}>{count}票</div>
-                    {(!isOut || isPicked) && (
+                    {isNumeric ? ((!isOut || isPicked) && (
+                      <NumericVoteInput
+                        value={myCount}
+                        max={max}
+                        color={color}
+                        onCommit={(n) => onVote(c, false, n)}
+                      />
+                    )) : ((!isOut || isPicked) && (
                       <button onClick={() => onVote(c, isPicked)} disabled={cannotPick && !isPicked} style={{
                         background: isPicked ? 'rgba(255,68,88,0.15)' : 'rgba(255,45,149,0.12)',
                         border: `1px solid ${isPicked ? 'rgba(255,68,88,0.4)' : 'rgba(255,45,149,0.3)'}`,
@@ -758,7 +854,7 @@ function CandidateList({ sub, myId, myVotes, voteCounts, optedOut, onVote, onVie
                       }}>
                         {isPicked ? '撤回' : isMulti ? (picksFull ? '已满' : (isMe ? '投自己' : '+1 票')) : '投 TA'}
                       </button>
-                    )}
+                    ))}
                   </div>
                 </div>
               );
@@ -856,7 +952,9 @@ function TabBar({ level1, setLevel1, level2, setLevel2, votedMap }) {
           const poolSubs = POOLS[g.key].subs;
           const voted = poolSubs.filter(s => {
             const v = votedMap[s.key];
-            return s.mode === 'multi5' ? (v && v.length > 0) : !!v;
+            if (s.mode === 'multi5') return v && v.length > 0;
+            if (s.mode === 'numeric') return v && typeof v === 'object' && Object.keys(v).length > 0;
+            return !!v;
           }).length;
           return (
             <button key={g.key} onClick={() => { setLevel1(g.key); setLevel2(0); }} style={{
@@ -877,7 +975,10 @@ function TabBar({ level1, setLevel1, level2, setLevel2, votedMap }) {
         {subs.map((s, i) => {
           const active = level2 === i;
           const v = votedMap[s.key];
-          const has = s.mode === 'multi5' ? (v && v.length > 0) : !!v;
+          const isMulti5 = s.mode === 'multi5';
+          const isNum = s.mode === 'numeric';
+          const numKeys = isNum && v && typeof v === 'object' ? Object.keys(v).length : 0;
+          const has = isMulti5 ? (v && v.length > 0) : (isNum ? numKeys > 0 : !!v);
           return (
             <button key={s.key} onClick={() => setLevel2(i)} style={{
               padding: '8px 16px', borderRadius: 999, fontSize: 12, whiteSpace: 'nowrap',
@@ -887,7 +988,8 @@ function TabBar({ level1, setLevel1, level2, setLevel2, votedMap }) {
               fontWeight: active ? 700 : 400, letterSpacing: '0.05em',
             }}>
               {has && !active && '● '}{s.name}
-              {s.mode === 'multi5' && v && <span style={{ marginLeft: 4 }}>({v.length})</span>}
+              {isMulti5 && v && <span style={{ marginLeft: 4 }}>({v.length})</span>}
+              {isNum && numKeys > 0 && <span style={{ marginLeft: 4 }}>({numKeys})</span>}
             </button>
           );
         })}
@@ -974,6 +1076,15 @@ function App() {
     Object.entries(allVotes).forEach(([, votes]) => {
       Object.entries(votes).forEach(([poolKey, value]) => {
         if (!result[poolKey]) return;
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          // numeric: { id: number }
+          Object.entries(value).forEach(([tid, n]) => {
+            if (typeof n === 'number' && n > 0) {
+              result[poolKey][tid] = (result[poolKey][tid] || 0) + n;
+            }
+          });
+          return;
+        }
         const targets = Array.isArray(value) ? value : (value ? [value] : []);
         targets.forEach(tid => { result[poolKey][tid] = (result[poolKey][tid] || 0) + 1; });
       });
@@ -996,11 +1107,19 @@ function App() {
     setClaimBusy(false);
   };
 
-  const handleVote = async (sub, target, isRemoving) => {
+  const handleVote = async (sub, target, isRemoving, count) => {
     const currentVote = myVotes[sub.key];
     let nextValue;
     if (sub.mode === 'single') {
       nextValue = (isRemoving || currentVote === target.id) ? null : target.id;
+    } else if (sub.mode === 'numeric') {
+      const max = sub.maxVotes ?? 9999;
+      const cur = (currentVote && typeof currentVote === 'object' && !Array.isArray(currentVote))
+        ? { ...currentVote } : {};
+      const n = Math.max(0, Math.min(max, Math.floor(Number(count) || 0)));
+      if (n > 0) cur[target.id] = n;
+      else delete cur[target.id];
+      nextValue = Object.keys(cur).length === 0 ? null : cur;
     } else {
       const max = sub.maxVotes ?? MAX_FRIEND_VOTES;
       const arr = Array.isArray(currentVote) ? [...currentVote] : [];
