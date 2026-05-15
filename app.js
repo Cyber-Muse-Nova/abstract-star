@@ -1231,7 +1231,7 @@ function App() {
           votedMap={myVotes} />
         <PoolView key={currentSub.key} sub={currentSub} myId={identity.id} myVotes={myVotes}
           voteCounts={voteCountsByPool[currentSub.key]} optedOut={optedOut}
-          onVote={(target, isPicked) => handleVote(currentSub, target, isPicked)}
+          onVote={(target, isPicked, count) => handleVote(currentSub, target, isPicked, count)}
           onViewBio={openPersonBio} />
         <div className="fnt-mn" style={{ textAlign: 'center', marginTop: 32, fontSize: 12, color: 'var(--muted)', letterSpacing: '0.25em' }}>
           ◆ NOVA CRYSTAL · CH.404 ◆
