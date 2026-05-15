@@ -102,21 +102,37 @@ async function handleVote(request, env) {
     friends_pervert: 5,
     friends_pure: Infinity,
   };
+  // 数值型池每个候选人的票数上限
+  const NUMERIC_POOL_MAX = {
+    friends_silly: 9999,
+  };
 
   const isEmpty = value === null || value === undefined ||
-    (Array.isArray(value) && value.length === 0);
+    (Array.isArray(value) && value.length === 0) ||
+    (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0);
   if (isEmpty) {
     delete votes[pool_key];
-  } else {
-    if (Array.isArray(value)) {
-      const max = POOL_MAX_VOTES[pool_key] != null ? POOL_MAX_VOTES[pool_key] : 5;
-      if (value.length > max) return json({ error: "too many votes" }, 400);
-      votes[pool_key] = value.filter(function (v) { return typeof v === "string"; });
-    } else if (typeof value === "string") {
-      votes[pool_key] = value;
-    } else {
-      return json({ error: "invalid value" }, 400);
+  } else if (Array.isArray(value)) {
+    const max = POOL_MAX_VOTES[pool_key] != null ? POOL_MAX_VOTES[pool_key] : 5;
+    if (value.length > max) return json({ error: "too many votes" }, 400);
+    votes[pool_key] = value.filter(function (v) { return typeof v === "string"; });
+  } else if (typeof value === "string") {
+    votes[pool_key] = value;
+  } else if (typeof value === "object" && value !== null) {
+    const perCandMax = NUMERIC_POOL_MAX[pool_key];
+    if (perCandMax == null) return json({ error: "numeric not allowed for this pool" }, 400);
+    const sanitized = {};
+    for (const k of Object.keys(value)) {
+      const n = value[k];
+      if (typeof k !== "string" || !k) continue;
+      if (typeof n !== "number" || !Number.isInteger(n) || n <= 0) continue;
+      if (n > perCandMax) return json({ error: "上限 " + perCandMax }, 400);
+      sanitized[k] = n;
     }
+    if (Object.keys(sanitized).length === 0) delete votes[pool_key];
+    else votes[pool_key] = sanitized;
+  } else {
+    return json({ error: "invalid value" }, 400);
   }
 
   await env.KV.put("votes:" + auth.id, JSON.stringify(votes));
